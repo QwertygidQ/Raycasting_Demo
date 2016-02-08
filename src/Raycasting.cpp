@@ -1,10 +1,21 @@
 #include "Raycasting.hpp"
 #include <math.h>
 #include <stdlib.h>
+#include <string>
 
 Raycasting::Raycasting()
 {
+	window = nullptr;
+	renderer = nullptr;
+	font = nullptr;
+
+	oldTime = newTime = FPS = 0.0;
+
+	moveSpeed = rotSpeed = 0.0;
+
 	running = false;
+
+	up = down = left = right = quit = false;
 
 	posX = 22;
 	posY = 12;
@@ -23,12 +34,21 @@ bool Raycasting::init()
 {
 	if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) != 0)
 		return false;
+
+	if(TTF_Init() == -1)
+		return false;
+
 	window = SDL_CreateWindow("raycasting_demo", SDL_WINDOWPOS_CENTERED,
 			SDL_WINDOWPOS_CENTERED, windowW, windowH, SDL_WINDOW_SHOWN);
 	if(window == nullptr)
 		return false;
+
 	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	if(renderer == nullptr)
+		return false;
+
+	font = TTF_OpenFont(fontPath, fontSize);
+	if(font == nullptr)
 		return false;
 
 	running = true;
@@ -56,6 +76,9 @@ void Raycasting::processInput()
 
 void Raycasting::update()
 {
+	moveSpeed = baseMoveSpeed/FPS;
+	rotSpeed = baseRotSpeed/FPS;
+
 	if(quit)
 	{
 		running = false;
@@ -197,6 +220,10 @@ void Raycasting::update()
 			break;
 		}
 	}
+
+	oldTime = newTime;
+	newTime = SDL_GetTicks();
+	FPS = 1000/(newTime - oldTime);
 }
 
 void Raycasting::render()
@@ -208,11 +235,35 @@ void Raycasting::render()
 		SDL_SetRenderDrawColor(renderer, linesColors[x][0], linesColors[x][1], linesColors[x][2], 0xFF);
 		SDL_RenderDrawLine(renderer, x, linesPoints[x][0], x, linesPoints[x][1]);
 	}
+
+ 	SDL_Color textColor = {0xFF, 0xFF, 0xFF}; //white
+
+ 	std::string temp = std::to_string(FPS);
+ 	SDL_Surface* textSurface = TTF_RenderText_Solid(font, temp.c_str(), textColor);
+ 	SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+ 	const int w = textSurface -> w, h = textSurface -> h;
+ 	SDL_FreeSurface(textSurface);
+ 	textSurface = nullptr;
+
+ 	SDL_Rect src, dest;
+
+	src.x = src.y = dest.x = dest.y = 0;
+	src.w = dest.w = w;
+	src.h = dest.h = h;
+
+	SDL_RenderCopyEx(renderer, textTexture, &src, &dest, 0, 0, SDL_FLIP_NONE);
+
+	SDL_DestroyTexture(textTexture);
+	textTexture = nullptr;
+
 	SDL_RenderPresent(renderer);
 }
 
 void Raycasting::end()
 {
+	TTF_CloseFont(font);
+	font = nullptr;
+
 	SDL_DestroyRenderer(renderer);
 	renderer = nullptr;
 

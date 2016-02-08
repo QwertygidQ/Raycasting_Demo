@@ -4,8 +4,10 @@
 
 #ifdef _WIN32
 	#include <SDL.h>
+	#include <SDL_ttf.h>
 #else
 	#include <SDL2/SDL.h>
+	#include <SDL2/SDL_ttf.h>
 #endif
 
 class Raycasting
@@ -23,6 +25,12 @@ public:
 private:
 	SDL_Window* window;
 	SDL_Renderer* renderer;
+	TTF_Font* font;
+	const char* fontPath = "../font/FreeSans.ttf";
+	const int fontSize = 20;
+
+	double oldTime, newTime, FPS;
+
 	enum Sizes {windowW = 1024, windowH = 768, worldSize = 24};
 
 	const uint8_t worldMap[worldSize][worldSize] =
@@ -57,7 +65,8 @@ private:
 	int linesPoints[windowW][2]; // Start and end
 	uint8_t linesColors[windowW][3]; //RGB
 
-	const double moveSpeed = 0.1, rotSpeed = 0.05;
+	const double baseMoveSpeed = 5.0, baseRotSpeed = 3.0;
+	double moveSpeed, rotSpeed;
 
 	bool running;
 
