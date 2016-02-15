@@ -35,6 +35,9 @@ bool Raycasting::init()
 	if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) != 0)
 		return false;
 
+	if(!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
+		return false;
+
 	if(TTF_Init() == -1)
 		return false;
 
@@ -50,6 +53,20 @@ bool Raycasting::init()
 	font = TTF_OpenFont(fontPath, fontSize);
 	if(font == nullptr)
 		return false;
+
+	for(const char* path : texturePaths)
+	{
+		SDL_Surface* load = IMG_Load(path);
+		SDL_Texture* temp = SDL_CreateTextureFromSurface(renderer, load);
+		SDL_FreeSurface(load);
+		load = nullptr;
+
+		if(temp == nullptr)
+			return false;
+
+		textureVector.push_back(temp);
+		temp = nullptr;
+	}
 
 	running = true;
 
@@ -183,42 +200,28 @@ void Raycasting::update()
 
 		int height = abs(int(windowH/perpWallDist));
 		int start = (windowH-height)/2;
-		if(start < 0)
-			start = 0;
 		int end = start+height;
-		if(end >= windowH)
-			end = windowH-1;
 
 		linesPoints[x][0] = start;
 		linesPoints[x][1] = end;
 
-		uint8_t color = 0xFF;
-		if(side == 1)
-			color /= 2;
+		int texture = worldMap[mapX][mapY];
 
-		switch(worldMap[mapX][mapY])
-		{
-		case 1: //red
-			linesColors[x][0] = color;
-			linesColors[x][1] = 0;
-			linesColors[x][2] = 0;
-			break;
-		case 2: //blue
-			linesColors[x][0] = 0;
-			linesColors[x][1] = color;
-			linesColors[x][2] = 0;
-			break;
-		case 3: //green
-			linesColors[x][0] = 0;
-			linesColors[x][1] = 0;
-			linesColors[x][2] = color;
-			break;
-		case 4: //white
-			linesColors[x][0] = color;
-			linesColors[x][1] = color;
-			linesColors[x][2] = color;
-			break;
-		}
+		double wallX;
+		if (side == 1)
+			wallX = rayPosX + ((mapY - rayPosY + (1 - stepY) / 2) / rayDirY) * rayDirX;
+		else
+			wallX = rayPosY + ((mapX - rayPosX + (1 - stepX) / 2) / rayDirX) * rayDirY;
+		wallX -= floor(wallX);
+
+		int texX = int(wallX * double(textureSize));
+		if(side == 0 && rayDirX > 0)
+			texX = textureSize - texX - 1;
+		if(side == 1 && rayDirY < 0)
+			texX = textureSize - texX - 1;
+
+		linesTextures[x][0] = texX;
+		linesTextures[x][1] = texture-1;
 	}
 
 	oldTime = newTime;
@@ -230,16 +233,27 @@ void Raycasting::render()
 {
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xFF);
 	SDL_RenderClear(renderer);
+
 	for(int x = 0; x < windowW; x++)
 	{
-		SDL_SetRenderDrawColor(renderer, linesColors[x][0], linesColors[x][1], linesColors[x][2], 0xFF);
-		SDL_RenderDrawLine(renderer, x, linesPoints[x][0], x, linesPoints[x][1]);
+		SDL_Rect src, dest;
+
+		src.x = linesTextures[x][0];
+		dest.x = x;
+		src.y = 0;
+		dest.y = linesPoints[x][0];
+		src.w = dest.w = 1;
+		src.h = textureSize;
+		dest.h = linesPoints[x][1] - linesPoints[x][0];
+
+		std::vector<SDL_Texture*>::iterator it = textureVector.begin();
+		std::advance(it, linesTextures[x][1]);
+		SDL_RenderCopyEx(renderer, *it, &src, &dest, 0, 0, SDL_FLIP_NONE);
 	}
 
  	SDL_Color textColor = {0xFF, 0xFF, 0xFF}; //white
 
- 	std::string temp = std::to_string(FPS);
- 	SDL_Surface* textSurface = TTF_RenderText_Solid(font, temp.c_str(), textColor);
+ 	SDL_Surface* textSurface = TTF_RenderText_Solid(font, std::to_string(FPS).c_str(), textColor);
  	SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
  	const int w = textSurface -> w, h = textSurface -> h;
  	SDL_FreeSurface(textSurface);
@@ -263,6 +277,18 @@ void Raycasting::end()
 {
 	TTF_CloseFont(font);
 	font = nullptr;
+
+	TTF_Quit();
+
+	for(SDL_Texture* texture : textureVector)
+	{
+		SDL_DestroyTexture(texture);
+		texture = nullptr;
+	}
+
+	textureVector.clear();
+
+	IMG_Quit();
 
 	SDL_DestroyRenderer(renderer);
 	renderer = nullptr;
